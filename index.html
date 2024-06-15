@@ -20,6 +20,7 @@
             margin-top: 20px;
             display: flex;
             justify-content: center;
+            position: relative;
         }
 
         #pdf-canvas {
@@ -28,7 +29,12 @@
             height: auto;
         }
 
-        .zoom-in, .zoom-out {
+        .draggable {
+            position: absolute;
+            cursor: move;
+        }
+
+        .zoom-in, .zoom-out, .add-button, .save-positions {
             margin: 10px;
         }
     </style>
@@ -40,20 +46,21 @@
             <h2>Indicadores Congresso 2024</h2>
             <span>Clique nos ícones para mais informações.</span>
         </div>
-        <div class="map-container">
-            <div title="Mapa">
-                <canvas id="pdf-canvas"></canvas>
-            </div>
-        </div>
         <div class="d-flex justify-content-center">
             <button class="btn btn-primary zoom-in">Zoom In</button>
             <button class="btn btn-primary zoom-out">Zoom Out</button>
+            <button class="btn btn-success add-button">Adicionar Botão</button>
+            <button class="btn btn-warning save-positions">Salvar Posições</button>
+        </div>
+        <div class="map-container" id="map-container">
+            <canvas id="pdf-canvas"></canvas>
         </div>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
         integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
         crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/interactjs@1.10.11/dist/interact.min.js"></script>
     <script>
         const url = 'Planta.pdf'; // Substitua pelo caminho do seu arquivo PDF
 
@@ -66,6 +73,7 @@
         pdfjsLib.getDocument(url).promise.then(function(pdfDoc_) {
             pdfDoc = pdfDoc_;
             renderPage(pageNum);
+            loadButtonPositions();
         });
 
         function renderPage(num) {
@@ -93,6 +101,70 @@
                 renderPage(pageNum);
             }
         });
+
+        document.querySelector('.add-button').addEventListener('click', () => {
+            addDraggableButton();
+        });
+
+        document.querySelector('.save-positions').addEventListener('click', () => {
+            saveButtonPositions();
+        });
+
+        function addDraggableButton(x = 0, y = 0, label = 'Drag me') {
+            const container = document.getElementById('map-container');
+            const button = document.createElement('button');
+            button.classList.add('btn', 'btn-info', 'draggable');
+            button.innerText = label;
+            container.appendChild(button);
+
+            button.style.transform = `translate(${x}px, ${y}px)`;
+            button.setAttribute('data-x', x);
+            button.setAttribute('data-y', y);
+
+            interact(button)
+                .draggable({
+                    modifiers: [
+                        interact.modifiers.restrictRect({
+                            restriction: 'parent',
+                            endOnly: true
+                        })
+                    ],
+                    listeners: {
+                        move(event) {
+                            const target = event.target;
+                            const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                            const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+
+                            target.style.transform = `translate(${x}px, ${y}px)`;
+                            target.setAttribute('data-x', x);
+                            target.setAttribute('data-y', y);
+                        }
+                    }
+                });
+        }
+
+        function saveButtonPositions() {
+            const buttons = document.querySelectorAll('.draggable');
+            const positions = [];
+            buttons.forEach(button => {
+                positions.push({
+                    x: button.getAttribute('data-x'),
+                    y: button.getAttribute('data-y'),
+                    label: button.innerText
+                });
+            });
+            localStorage.setItem('buttonPositions', JSON.stringify(positions));
+            alert('Posições salvas.');
+        }
+
+        function loadButtonPositions() {
+            const positions = JSON.parse(localStorage.getItem('buttonPositions'));
+            if (positions) {
+                positions.forEach(pos => {
+                    addDraggableButton(pos.x, pos.y, pos.label);
+                });
+            }
+        }
     </script>
 </body>
 
