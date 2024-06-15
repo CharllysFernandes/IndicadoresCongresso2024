@@ -21,6 +21,8 @@
             display: flex;
             justify-content: center;
             position: relative;
+            width: 100%;
+            height: auto;
         }
 
         #pdf-canvas {
@@ -34,7 +36,8 @@
             cursor: move;
         }
 
-        .zoom-in, .zoom-out, .add-button, .save-positions {
+        .add-button,
+        .save-positions {
             margin: 10px;
         }
     </style>
@@ -47,8 +50,6 @@
             <span>Clique nos ícones para mais informações.</span>
         </div>
         <div class="d-flex justify-content-center">
-            <button class="btn btn-primary zoom-in">Zoom In</button>
-            <button class="btn btn-primary zoom-out">Zoom Out</button>
             <button class="btn btn-success add-button">Adicionar Botão</button>
             <button class="btn btn-warning save-positions">Salvar Posições</button>
         </div>
@@ -66,9 +67,10 @@
 
         let pdfDoc = null,
             pageNum = 1,
-            scale = 1.0,
             canvas = document.getElementById('pdf-canvas'),
-            ctx = canvas.getContext('2d');
+            ctx = canvas.getContext('2d'),
+            originalWidth = 0,
+            originalHeight = 0;
 
         pdfjsLib.getDocument(url).promise.then(function(pdfDoc_) {
             pdfDoc = pdfDoc_;
@@ -78,7 +80,9 @@
 
         function renderPage(num) {
             pdfDoc.getPage(num).then(function(page) {
-                const viewport = page.getViewport({ scale: scale });
+                const viewport = page.getViewport({ scale: 1.0 });
+                originalWidth = viewport.width;
+                originalHeight = viewport.height;
                 canvas.height = viewport.height;
                 canvas.width = viewport.width;
 
@@ -86,40 +90,32 @@
                     canvasContext: ctx,
                     viewport: viewport
                 };
-                page.render(renderContext);
+                page.render(renderContext).promise.then(() => {
+                    loadButtonPositions();
+                });
             });
         }
 
-        document.querySelector('.zoom-in').addEventListener('click', () => {
-            scale += 0.2;
-            renderPage(pageNum);
-        });
-
-        document.querySelector('.zoom-out').addEventListener('click', () => {
-            if (scale > 0.4) {
-                scale -= 0.2;
-                renderPage(pageNum);
-            }
-        });
-
         document.querySelector('.add-button').addEventListener('click', () => {
-            addDraggableButton();
+            addDraggableButton(0.5, 0.5, 'Drag me'); // Posições relativas no centro da tela
         });
 
         document.querySelector('.save-positions').addEventListener('click', () => {
             saveButtonPositions();
         });
 
-        function addDraggableButton(x = 0, y = 0, label = 'Drag me') {
+        function addDraggableButton(relX = 0, relY = 0, label = 'Drag me') {
             const container = document.getElementById('map-container');
             const button = document.createElement('button');
             button.classList.add('btn', 'btn-info', 'draggable');
             button.innerText = label;
             container.appendChild(button);
 
+            const x = relX * originalWidth;
+            const y = relY * originalHeight;
             button.style.transform = `translate(${x}px, ${y}px)`;
-            button.setAttribute('data-x', x);
-            button.setAttribute('data-y', y);
+            button.setAttribute('data-rel-x', relX);
+            button.setAttribute('data-rel-y', relY);
 
             interact(button)
                 .draggable({
@@ -138,6 +134,12 @@
                             target.style.transform = `translate(${x}px, ${y}px)`;
                             target.setAttribute('data-x', x);
                             target.setAttribute('data-y', y);
+
+                            // Atualiza as coordenadas relativas
+                            const relX = x / originalWidth;
+                            const relY = y / originalHeight;
+                            target.setAttribute('data-rel-x', relX);
+                            target.setAttribute('data-rel-y', relY);
                         }
                     }
                 });
@@ -148,8 +150,8 @@
             const positions = [];
             buttons.forEach(button => {
                 positions.push({
-                    x: button.getAttribute('data-x'),
-                    y: button.getAttribute('data-y'),
+                    relX: button.getAttribute('data-rel-x'),
+                    relY: button.getAttribute('data-rel-y'),
                     label: button.innerText
                 });
             });
@@ -161,10 +163,21 @@
             const positions = JSON.parse(localStorage.getItem('buttonPositions'));
             if (positions) {
                 positions.forEach(pos => {
-                    addDraggableButton(pos.x, pos.y, pos.label);
+                    addDraggableButton(parseFloat(pos.relX), parseFloat(pos.relY), pos.label);
                 });
             }
         }
+
+        window.addEventListener('resize', () => {
+            const buttons = document.querySelectorAll('.draggable');
+            buttons.forEach(button => {
+                const relX = parseFloat(button.getAttribute('data-rel-x'));
+                const relY = parseFloat(button.getAttribute('data-rel-y'));
+                const x = relX * originalWidth;
+                const y = relY * originalHeight;
+                button.style.transform = `translate(${x}px, ${y}px)`;
+            });
+        });
     </script>
 </body>
 
